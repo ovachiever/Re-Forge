@@ -1,3 +1,5 @@
+<p align="center"><img src="RE-Forge_logo.png" alt="Re-Forge" width="420"></p>
+
 # Re-Forge
 
 Re-Forge is a fork of [Forge](https://github.com/Card-Forge/forge), the open-source Magic: The Gathering rules engine, in which the AI seat is driven by a large language model. Instead of picking one action at a time, the opponent writes a plan for its whole turn (lands, spells, sequencing, attacks, and what to do if you interrupt), executes that plan, talks at the table while it plays, and answers a chat box in real time. The engine still enforces every rule: the model only ever chooses from a menu of legal actions built from the live game state. All of the Magic engine, the card database, and the desktop client come from upstream Card-Forge/forge and remain under GPL-3.0, and this fork is GPL-3.0 as well.

@@ -1,1 +1,6 @@
-* text=autoplay.bat text eol=crlf
+* text=auto
+play.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
