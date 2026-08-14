@@ -1,0 +1,578 @@
+package forge.game.player;
+
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multiset;
+
+import forge.LobbyPlayer;
+import forge.card.CardType;
+import forge.card.MagicColor;
+import forge.card.mana.ManaAtom;
+import forge.game.GameEntityView;
+import forge.game.card.Card;
+import forge.game.card.CardView;
+import forge.game.card.CounterType;
+import forge.game.keyword.KeywordView;
+import forge.game.keyword.KeywordCollectionView;
+import forge.game.zone.PlayerZone;
+import forge.game.zone.ZoneType;
+import forge.trackable.TrackableCollection;
+import forge.trackable.TrackableProperty;
+import forge.trackable.Tracker;
+import forge.util.CardTranslation;
+import forge.util.Lang;
+import forge.util.Localizer;
+import forge.util.collect.FCollection;
+import forge.util.collect.FCollectionView;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.*;
+import java.util.Map.Entry;
+
+public class PlayerView extends GameEntityView {
+    private static final long serialVersionUID = 7005892740909549086L;
+
+    public static PlayerView get(Player p) {
+        return p == null ? null : p.getView();
+    }
+
+    public static TrackableCollection<PlayerView> getCollection(Iterable<Player> players) {
+        if (players == null) {
+            return null;
+        }
+        TrackableCollection<PlayerView> collection = new TrackableCollection<>();
+        for (Player p : players) {
+            collection.add(p.getView());
+        }
+        return collection;
+    }
+
+    public PlayerView(final int id0, final Tracker tracker) {
+        super(id0, tracker);
+
+        set(TrackableProperty.Mana, Maps.newHashMapWithExpectedSize(MagicColor.NUMBER_OR_COLORS + 1));
+    }
+
+    public boolean isAI()   {
+        return get(TrackableProperty.IsAI);
+    }
+    void updateIsAI(Player p) {
+        set(TrackableProperty.IsAI, p.getController().isAI());
+    }
+
+    public String getLobbyPlayerName() {
+        return get(TrackableProperty.LobbyPlayerName);
+    }
+    void updateLobbyPlayerName(Player p) {
+        set(TrackableProperty.LobbyPlayerName, p.getLobbyPlayer().getName());
+    }
+    public boolean isLobbyPlayer(LobbyPlayer p) {
+        return getLobbyPlayerName().equals(p.getName());
+    }
+
+    public int getAvatarIndex() {
+        return get(TrackableProperty.AvatarIndex);
+    }
+    void updateAvatarIndex(Player p) {
+        set(TrackableProperty.AvatarIndex, p.getLobbyPlayer().getAvatarIndex());
+    }
+
+    public String getAvatarCardImageKey() {
+        return get(TrackableProperty.AvatarCardImageKey);
+    }
+    void updateAvatarCardImageKey(Player p) {
+        set(TrackableProperty.AvatarCardImageKey, p.getLobbyPlayer().getAvatarCardImageKey());
+    }
+
+    public int getSleeveIndex() {
+        return get(TrackableProperty.SleeveIndex);
+    }
+    void updateSleeveIndex(Player p) {
+        set(TrackableProperty.SleeveIndex, p.getLobbyPlayer().getSleeveIndex());
+    }
+
+    public String getSleeveArtKey() {
+        return get(TrackableProperty.SleeveArtKey);
+    }
+    void updateSleeveArtKey(Player p) {
+        set(TrackableProperty.SleeveArtKey, p.getLobbyPlayer().getSleeveArtKey());
+    }
+
+    public int getSleeveArtOffset() {
+        final Integer offset = get(TrackableProperty.SleeveArtOffset);
+        return offset == null ? 500 : offset;
+    }
+    void updateSleeveArtOffset(Player p) {
+        set(TrackableProperty.SleeveArtOffset, p.getLobbyPlayer().getSleeveArtOffset());
+    }
+
+    public String getCurrentPlaneName() { return get(TrackableProperty.CurrentPlane); }
+    void updateCurrentPlaneName( String plane ) {
+        set(TrackableProperty.CurrentPlane, plane);
+    }
+
+    public List<PlayerView> getOpponents() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Opponents), List.of());
+    }
+    void updateOpponents(Player p) {
+        set(TrackableProperty.Opponents, PlayerView.getCollection(p.getOpponents()));
+    }
+
+    public boolean isOpponentOf(final PlayerView other) {
+        return getOpponents().contains(other);
+    }
+
+    public final String getCommanderInfo(CardView v) {
+        if (v == null) {
+            return StringUtils.EMPTY;
+        }
+
+        final StringBuilder sb = new StringBuilder();
+
+        sb.append(Localizer.getInstance().getMessage("lblCommanderCastCard", getCommanderCast(v)));
+        sb.append("\n");
+
+        for (final PlayerView p : Iterables.concat(Collections.singleton(this), getOpponents())) {
+            final int damage = p.getCommanderDamage(v);
+            if (damage > 0) {
+                sb.append(Localizer.getInstance().getMessage("lblCommanderDealNDamageToPlayer", p, CardTranslation.getTranslatedName(v.getName()), damage));
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    public final List<String> getPlayerCommanderInfo() {
+        final List<CardView> commanders = getCommanders();
+        if (commanders == null || commanders.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        final List<PlayerView> opponents = getOpponents();
+        for (PlayerView opponent: opponents) {
+            if (opponent.getCommanders() == null) {
+                return Collections.emptyList();
+            }
+        }
+
+        final List<String> info = Lists.newArrayListWithExpectedSize(opponents.size());
+
+        info.add("Commanders:");
+        for (final CardView v : commanders) {
+            info.add(Localizer.getInstance().getMessage("lblCommanderCastPlayer", CardTranslation.getTranslatedName(v.getName()), getCommanderCast(v)));
+        }
+
+        // own commanders
+        for (final CardView v : commanders) {
+            final int damage = getCommanderDamage(v);
+            if (damage > 0) {
+                info.add(Localizer.getInstance().getMessage("lblNCommanderDamageFromOwnCommander", CardTranslation.getTranslatedName(v.getName()), damage));
+            }
+        }
+
+        // opponents commanders
+        for (final PlayerView p : opponents) {
+            for (final CardView v : p.getCommanders()) {
+                final int damage = getCommanderDamage(v);
+                if (damage > 0) {
+                    info.add(Localizer.getInstance().getMessage("lblNCommanderDamageFromPlayerCommander", p, CardTranslation.getTranslatedName(v.getName()), damage));
+                }
+            }
+        }
+        return info;
+    }
+
+    @Override
+    public String toString() {
+        return getName();
+    }
+
+    public int getLife() {
+        return get(TrackableProperty.Life);
+    }
+    void updateLife(Player p) {
+        set(TrackableProperty.Life, p.getLife());
+    }
+
+    public boolean getIsExtraTurn() {
+        return get(TrackableProperty.IsExtraTurn);
+    }
+    public void setIsExtraTurn(final boolean val) {
+        set(TrackableProperty.IsExtraTurn, val);
+    }
+
+    public boolean getHasLost() {
+        return get(TrackableProperty.HasLost);
+    }
+    public void setHasLost(final boolean val) {
+        set(TrackableProperty.HasLost, val);
+    }
+
+    public boolean hasAvailableActions() {
+        return get(TrackableProperty.HasAvailableActions);
+    }
+    public void setHasAvailableActions(boolean value) {
+        set(TrackableProperty.HasAvailableActions, value);
+    }
+
+    public int getAvatarLifeDifference() {
+        return get(TrackableProperty.AvatarLifeDifference);
+    }
+    public void setAvatarLifeDifference(final int val) {
+        set(TrackableProperty.AvatarLifeDifference, val);
+    }
+
+    public int getExtraTurnCount() {
+        return get(TrackableProperty.ExtraTurnCount);
+    }
+    public void setExtraTurnCount(final int val) {
+        set(TrackableProperty.ExtraTurnCount, val);
+    }
+
+    public boolean getHasPriority() {
+        return get(TrackableProperty.HasPriority);
+    }
+    public void setHasPriority(final boolean val) {
+        set(TrackableProperty.HasPriority, val);
+    }
+
+    public int getMaxHandSize() {
+        return get(TrackableProperty.MaxHandSize);
+    }
+    void updateMaxHandSize(Player p) {
+        set(TrackableProperty.MaxHandSize, p.getMaxHandSize());
+    }
+
+    public boolean hasUnlimitedHandSize() {
+        return get(TrackableProperty.HasUnlimitedHandSize);
+    }
+    void updateUnlimitedHandSize(Player p) {
+        set(TrackableProperty.HasUnlimitedHandSize, p.isUnlimitedHandSize());
+    }
+
+    public String getMaxHandString() {
+        return hasUnlimitedHandSize() ? Localizer.getInstance().getMessage("lblUnlimited") : String.valueOf(getMaxHandSize());
+    }
+
+    public int getMaxLandPlay() {
+        return get(TrackableProperty.MaxLandPlay);
+    }
+    void updateMaxLandPlay(Player p) {
+        set(TrackableProperty.MaxLandPlay, p.getMaxLandPlays());
+    }
+
+    public boolean hasUnlimitedLandPlay() {
+        return get(TrackableProperty.HasUnlimitedLandPlay);
+    }
+    void updateUnlimitedLandPlay(Player p) {
+        set(TrackableProperty.HasUnlimitedLandPlay, p.getMaxLandPlaysInfinite());
+    }
+
+    public String getMaxLandString() {
+        return hasUnlimitedLandPlay() ? "unlimited" : String.valueOf(getMaxLandPlay());
+    }
+
+    public int getNumLandThisTurn() {
+        return get(TrackableProperty.NumLandThisTurn);
+    }
+    void updateNumLandThisTurn(Player p) {
+        set(TrackableProperty.NumLandThisTurn, p.getLandsPlayedThisTurn());
+    }
+
+    public int getNumManaShards() {
+        return get(TrackableProperty.NumManaShards);
+    }
+    void updateNumManaShards(Player p) {
+        set(TrackableProperty.NumManaShards, p.getNumManaShards());
+    }
+
+    public Map<String, String> getDraftNotes() {
+        return get(TrackableProperty.DraftNotes);
+    }
+    public void setDraftNotes(Map<String, String> draftNotes) {
+        set(TrackableProperty.DraftNotes, draftNotes);
+    }
+
+    public int getNumDrawnThisTurn() {
+        return get(TrackableProperty.NumDrawnThisTurn);
+    }
+    void updateNumDrawnThisTurn(Player p) {
+        set(TrackableProperty.NumDrawnThisTurn, p.getNumDrawnThisTurn());
+    }
+
+    public int getAdditionalVote() {
+        return get(TrackableProperty.AdditionalVote);
+    }
+    public void updateAdditionalVote(Player p) {
+        set(TrackableProperty.AdditionalVote, p.getAdditionalVotesAmount());
+    }
+
+    public int getOptionalAdditionalVote() {
+        return get(TrackableProperty.OptionalAdditionalVote);
+    }
+    public void updateOptionalAdditionalVote(Player p) {
+        set(TrackableProperty.OptionalAdditionalVote, p.getAdditionalOptionalVotesAmount());
+    }
+
+    public boolean getControlVote() {
+        return get(TrackableProperty.ControlVotes);
+    }
+    public void updateControlVote(boolean val) {
+        set(TrackableProperty.ControlVotes, val);
+    }
+
+    public int getAdditionalVillainousChoices() {
+        return get(TrackableProperty.AdditionalVillainousChoices);
+    }
+    public void updateAdditionalVillainousChoices(Player p) {
+        set(TrackableProperty.AdditionalVillainousChoices, p.getAdditionalVotesAmount());
+    }
+
+    public KeywordCollectionView getKeywords() {
+        return get(TrackableProperty.Keywords);
+    }
+    void updateKeywords(Player p) {
+        set(TrackableProperty.Keywords, p.getKeywords().getView());
+    }
+
+    public List<CardView> getCommanders() {
+        return get(TrackableProperty.Commander);
+    }
+    void updateCommander(Player p) {
+        set(TrackableProperty.Commander, CardView.getCollection(p.getCommanders()));
+    }
+
+    public int getCommanderDamage(CardView commander) {
+        Map<Integer, Integer> map = get(TrackableProperty.CommanderDamage);
+        if (map == null) { return 0; }
+        Integer damage = map.get(commander.getId());
+        return damage == null ? 0 : damage;
+    }
+    void updateCommanderDamage(Player p) {
+        Map<Integer, Integer> map = Maps.newHashMap();
+        for (Entry<Card, Integer> entry : p.getCommanderDamage()) {
+            map.put(entry.getKey().getId(), entry.getValue());
+        }
+        set(TrackableProperty.CommanderDamage, map);
+    }
+    void updateMergedCommanderDamage(Card card, Card commander) {
+        // Add commander damage to top card for card view panel info
+        for (final PlayerView p : Iterables.concat(Collections.singleton(this), getOpponents())) {
+            Map<Integer, Integer> map = p.get(TrackableProperty.CommanderDamage);
+            if (map == null) continue;
+            Integer damage = map.get(commander.getId());
+            map.put(card.getId(), damage);
+        }
+    }
+
+    public int getCommanderCast(CardView commander) {
+        Map<Integer, Integer> map = get(TrackableProperty.CommanderCast);
+        if (map == null) { return 0; }
+        Integer damage = map.get(commander.getId());
+        return damage == null ? 0 : damage;
+    }
+
+    void updateCommanderCast(Player p, Card c) {
+        Map<Integer, Integer> map = get(TrackableProperty.CommanderCast);
+        if (map == null) {
+            map = Maps.newHashMap();
+            set(TrackableProperty.CommanderCast, map);
+        }
+        map.put(c.getId(), p.getCommanderCast(c));
+        flagAsChanged(TrackableProperty.CommanderCast);
+    }
+
+    void updateMergedCommanderCast(Player p, Card target, Card commander) {
+        Map<Integer, Integer> map = get(TrackableProperty.CommanderCast);
+        if (map == null) {
+            map = Maps.newHashMap();
+            set(TrackableProperty.CommanderCast, map);
+        }
+        map.put(target.getId(), p.getCommanderCast(commander));
+        flagAsChanged(TrackableProperty.CommanderCast);
+    }
+
+    public PlayerView getMindSlaveMaster() {
+        return get(TrackableProperty.MindSlaveMaster);
+    }
+    void updateMindSlaveMaster(Player p) {
+        set(TrackableProperty.MindSlaveMaster, PlayerView.get(p.getControllingPlayer()));
+    }
+
+    public FCollectionView<CardView> getAnte() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Ante), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getBattlefield() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Battlefield), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getCommand() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Command), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getExile() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Exile), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getFlashback() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Flashback), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getGraveyard() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Graveyard), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getHand() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Hand), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getLibrary() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Library), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getSideboard() {
+        return Objects.requireNonNullElse(get(TrackableProperty.Sideboard), FCollection.getEmpty());
+    }
+
+    public FCollectionView<CardView> getCards(final ZoneType zone) {
+        TrackableProperty prop = zone.getTrackableProperty();
+        if (prop != null) {
+            return Objects.requireNonNullElse(get(prop), FCollection.getEmpty());
+        }
+        return FCollection.getEmpty();
+    }
+    private int getZoneSize(TrackableProperty zoneProp) {
+        TrackableCollection<CardView> cards = get(zoneProp);
+        return cards == null ? 0 : cards.size();
+    }
+
+    public int getZoneSize(final ZoneType zone) {
+        TrackableProperty prop = zone.getTrackableProperty();
+        return prop == null ? 0 : getZoneSize(prop);
+    }
+
+    public int getZoneTypes(TrackableProperty zoneProp) {
+        TrackableCollection<CardView> cards = get(zoneProp);
+        HashSet<CardType.CoreType> types = new HashSet<>();
+        if (cards == null)
+            return 0;
+
+        for (CardView c : cards) {
+            types.addAll(c.getCurrentState().getType().getCoreTypes());
+        }
+
+        return types.size();
+    }
+
+    public boolean hasDelirium() {
+        return getZoneTypes(TrackableProperty.Graveyard) >= 4;
+    }
+
+    void updateZone(PlayerZone zone) {
+        TrackableProperty prop = zone.getZoneType().getTrackableProperty();
+        if (prop == null) { return; }
+        set(prop, CardView.getCollection(zone.getCards(false)));
+
+        //update flashback zone when relevant zones change
+        switch (zone.getZoneType()) {
+            case Command:
+            case Graveyard:
+            case Library:
+            case Exile:
+                updateFlashback(zone.getPlayer());
+                break;
+            default:
+                break;
+        }
+    }
+
+    void updateFlashback(Player p) {
+        set(TrackableProperty.Flashback, CardView.getCollection(p.getCardsIn(ZoneType.Flashback)));
+    }
+
+    public int getMana(final byte color) {
+        return getMana().getOrDefault(color, 0);
+    }
+    private Map<Byte, Integer> getMana() {
+        return get(TrackableProperty.Mana);
+    }
+    void updateMana(Player p) {
+        Map<Byte, Integer> mana = new HashMap<>();
+        for (byte b : ManaAtom.MANATYPES) {
+            mana.put(b, p.getManaPool().getAmountOfColor(b));
+        }
+        set(TrackableProperty.Mana, mana);
+    }
+
+    private List<String> getDetailsList() {
+        final List<String> details = Lists.newArrayListWithCapacity(8);
+        details.add(Localizer.getInstance().getMessage("lblLifeHas", getLife()));
+
+        Multiset<CounterType> counters = getCounters();
+        if (counters != null) {
+            for (Multiset.Entry<CounterType> p : counters.entrySet()) {
+                if (p.getCount() > 0) {
+                    details.add(Localizer.getInstance().getMessage("lblTypeCounterHas", p.getElement().getName(), p.getCount()));
+                }
+            }
+        }
+
+        details.add(Localizer.getInstance().getMessage("lblCardInHandHas", getZoneSize(ZoneType.Hand), getMaxHandString()));
+        details.add(Localizer.getInstance().getMessage("lblLandsPlayed", getNumLandThisTurn(), getMaxLandString()));
+        details.add(Localizer.getInstance().getMessage("lblCardDrawnThisTurnHas", getNumDrawnThisTurn()));
+        details.add(Localizer.getInstance().getMessage("lblDamagepreventionHas", getPreventNextDamage()));
+
+        int v = getAdditionalVote();
+        if (v > 0) {
+            details.add(Localizer.getInstance().getMessage("lblAdditionalVotes", v));
+        }
+        v = getOptionalAdditionalVote();
+        if (v > 0) {
+            details.add(Localizer.getInstance().getMessage("lblOptionalAdditionalVotes", v));
+        }
+
+        if (getControlVote()) {
+            details.add(Localizer.getInstance().getMessage("lblControlsVote"));
+        }
+
+        if (getIsExtraTurn()) {
+            details.add(Localizer.getInstance().getMessage("lblIsExtraTurn"));
+        }
+        details.add(Localizer.getInstance().getMessage("lblExtraTurnCountHas", getExtraTurnCount()));
+
+        final String keywords = Lang.joinHomogenous(getKeywords().getValues(), KeywordView::title);
+        if (!keywords.isEmpty()) {
+            details.add(keywords);
+        }
+        final FCollectionView<CardView> ante = getAnte();
+        if (!ante.isEmpty()) {
+            details.add(Localizer.getInstance().getMessage("lblAntedHas", Lang.joinHomogenous(ante)));
+        }
+        details.addAll(getPlayerCommanderInfo());
+        return details;
+    }
+    public String getDetails() {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(getName());
+        builder.append('\n');
+        for (final String detailsPart : getDetailsList()) {
+            builder.append(detailsPart);
+            builder.append('\n');
+        }
+        return builder.toString();
+    }
+    public String getDetailsHtml() {
+        final StringBuilder builder = new StringBuilder();
+        builder.append("<html>");
+        builder.append(getName());
+        builder.append("<hr/>");
+        for (final String line : getDetailsList()) {
+            builder.append(line);
+            builder.append("<br/>");
+        }
+        builder.append("</html>");
+        return builder.toString();
+    }
+}

@@ -1,0 +1,226 @@
+/*
+ * Forge: Play Magic: the Gathering.
+ * Copyright (C) 2011  Nate
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package forge.screens.match.views;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
+
+import javax.swing.JPanel;
+
+import com.google.common.collect.Lists;
+
+import forge.game.GameLogEntry;
+import forge.game.GameLogEntryType;
+import forge.game.GameLogVerbosity;
+import forge.game.GameView;
+import forge.gui.framework.DragCell;
+import forge.gui.framework.DragTab;
+import forge.gui.framework.EDocID;
+import forge.gui.framework.IVDoc;
+import forge.localinstance.properties.ForgePreferences.FPref;
+import forge.model.FModel;
+import forge.screens.match.GameLogPanel;
+import forge.screens.match.controllers.CLog;
+import forge.toolbox.FSkin;
+import forge.toolbox.FSkin.SkinFont;
+import forge.util.Localizer;
+import net.miginfocom.swing.MigLayout;
+
+/**
+ * Assembles Swing components of game log report.
+ *
+ * <br><br><i>(V at beginning of class name denotes a view class.)</i>
+ */
+public class VLog implements IVDoc<CLog> {
+
+    // Keeps a record of log entries currently displayed so we can
+    // easily identify new entries to be added to the game log.
+    private final List<GameLogEntry> displayedLogEntries = Lists.newArrayList();
+
+    // Used to determine when a new game has started.
+    private GameView gameLogModel = null;
+
+    // Fields used with interface IVDoc
+    private DragCell parentCell;
+    private final DragTab tab = new DragTab(Localizer.getInstance().getMessage("lblLog"));
+
+    // Other fields
+    private final GameLogPanel gameLog;
+    private JPanel p = null;
+
+    private final CLog controller;
+
+    //========== Constructor
+    public VLog(final CLog controller) {
+        this.controller = controller;
+        gameLog = new GameLogPanel();
+        gameLog.setOnCardHover(card -> {
+            if (!card.isFaceDown()) {
+                controller.getMatchUI().setCard(card);
+            }
+        });
+    }
+
+    //========== Overridden methods
+    /* (non-Javadoc)
+     * @see forge.gui.framework.IVDoc#populate()
+     */
+    @Override
+    public void populate() {
+        // (Panel uses observers to update, no permanent components here.)
+    }
+
+    /* (non-Javadoc)
+     * @see forge.gui.framework.IVDoc#setParentCell()
+     */
+    @Override
+    public void setParentCell(final DragCell cell0) {
+        this.parentCell = cell0;
+    }
+
+    /* (non-Javadoc)
+     * @see forge.gui.framework.IVDoc#getParentCell()
+     */
+    @Override
+    public DragCell getParentCell() {
+        return this.parentCell;
+    }
+
+    /* (non-Javadoc)
+     * @see forge.gui.framework.IVDoc#getDocumentID()
+     */
+    @Override
+    public EDocID getDocumentID() {
+        return EDocID.REPORT_LOG;
+    }
+
+    /* (non-Javadoc)
+     * @see forge.gui.framework.IVDoc#getTabLabel()
+     */
+    @Override
+    public DragTab getTabLabel() {
+        return tab;
+    }
+
+    /* (non-Javadoc)
+     * @see forge.gui.framework.IVDoc#getLayoutControl()
+     */
+    @Override
+    public CLog getLayoutControl() {
+        return controller;
+    }
+
+    /**
+     * Called whenever there are new log entries to be displayed.
+     * <p>
+     * This is an Observer update method.
+     */
+    public void updateConsole() {
+        final GameView model = controller.getMatchUI().getGameView();
+        if (isGameLogConsoleVisible() && model != null) {
+            resetDisplayIfNewGame(model);
+            displayNewGameLogEntries(model);
+            // Important : refreshLayout() needs to be called every update.
+            refreshLayout();
+        }
+    }
+
+    /**
+     * Re-renders all log entries using the current verbosity preference.
+     * Called when the user changes the log verbosity mid-match.
+     */
+    public void refreshDisplay() {
+        final GameView model = controller.getMatchUI().getGameView();
+        if (model == null) {
+            return;
+        }
+        displayedLogEntries.clear();
+        gameLog.reset();
+        displayNewGameLogEntries(model);
+        refreshLayout();
+    }
+
+    private boolean isGameLogConsoleVisible() {
+        return parentCell != null && parentCell.getSelected().equals(this);
+    }
+
+    private void resetDisplayIfNewGame(final GameView model) {
+        if (this.gameLogModel != model) {
+            gameLog.reset();
+            this.displayedLogEntries.clear();
+            this.gameLogModel = model;
+        }
+    }
+
+    /**
+     * Refreshes game log console container.
+     * <p>
+     * For some reason this needs to be called every time the console
+     * is updated with a new event, otherwise if the console is dragged
+     * to a new tab the log display disappears.
+     * <p>
+     * Since it is simply swapping in/out a reference to an existing object
+     * I don't think it is a major concern but should probably try to
+     * come up with more elegant solution some time.
+     */
+    private void refreshLayout() {
+        //TODO: Find a way to avoid calling refreshLayout() on every update.
+        p = parentCell.getBody();
+        p.remove(gameLog);
+        p.setLayout(new MigLayout("insets 1"));
+        p.add(gameLog, "w 10:100%, h 100%");
+    }
+
+    private void displayNewGameLogEntries(final GameView model) {
+        for (final GameLogEntry logEntry : Lists.reverse(getNewGameLogEntries(model))) {
+            gameLog.setTextFont(getJTextAreaFont(logEntry.type()));
+            gameLog.addLogEntry(logEntry.message(), logEntry.sourceCard(), controller.getMatchUI().getLocalPlayers());
+            this.displayedLogEntries.add(logEntry);
+        }
+    }
+
+    private List<GameLogEntry> getNewGameLogEntries(final GameView model) {
+        final String verbosityPref = FModel.getPreferences().getPref(FPref.DEV_LOG_ENTRY_TYPE);
+        final GameLogVerbosity verbosity = GameLogVerbosity.fromString(verbosityPref);
+        if (model != null && model.getGameLog() != null) {
+            final List<GameLogEntry> logEntries;
+            if (verbosity == GameLogVerbosity.CUSTOM) {
+                logEntries = model.getGameLog().getLogEntriesForTypes(
+                        FModel.getPreferences().getCustomLogTypes());
+            } else {
+                logEntries = model.getGameLog().getLogEntriesForVerbosity(verbosity);
+            }
+            // Use identity comparison to filter displayed entries. GameLogEntry is a record
+            // (value equality) and CardView.equals() compares by ID, so recasting the same card
+            // produces a value-equal entry that removeAll would incorrectly filter out.
+            Set<GameLogEntry> displayed = Collections.newSetFromMap(new IdentityHashMap<>());
+            displayed.addAll(displayedLogEntries);
+            logEntries.removeIf(displayed::contains);
+            return logEntries;
+        }
+        return new ArrayList<>();
+    }
+
+    private static SkinFont getJTextAreaFont(final GameLogEntryType logEntryType) {
+        final boolean isNewTurn = (logEntryType == GameLogEntryType.TURN);
+        return (isNewTurn ? FSkin.getBoldFont() : FSkin.getFont());
+    }
+}

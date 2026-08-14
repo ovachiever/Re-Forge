@@ -1,0 +1,17 @@
+Name:Xira's Boss Effect
+ManaCost:no cost
+Colors:black,green,red
+Types:Enchantment
+S:Mode$ Continuous | Affected$ Insect.YouCtrl+nonToken | EffectZone$ Command | AddKeyword$ Double team | Description$ Insects you control have double team and attack each turn if able.
+S:Mode$ MustAttack | ValidCreature$ Insect.YouCtrl | EffectZone$ Command | Secondary$ True | Description$ Insects you control have +1/+1 and double team and attack each turn if able.
+T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Command | Execute$ TrigToken | TriggerDescription$ At the beginning of your upkeep, create a 0/1 green Egg creature token with defender, then put an Hatchling counter on each Egg you control.
+SVar:TrigToken:DB$ Token | TokenScript$ g_0_1_egg_defender | TokenOwner$ You | SubAbility$ DBPutCounterAll
+SVar:DBPutCounterAll:DB$ PutCounterAll | ValidCards$ Egg.YouCtrl | CounterType$ HATCHLING | CounterNum$ 1
+T:Mode$ Phase | Phase$ End of Turn | IsPresent$ Card.Egg+YouCtrl | PresentCompare$ GE3 | ValidPlayer$ You | TriggerZones$ Command | Execute$ TrigChooseRandom | TriggerDescription$ At the beginning of your end step, if you control 3 or more egg, sacrifice one at random and conjure a random Insect with mana value equal to it's Hatchling counters unto the battlefield
+SVar:TrigChooseRandom:DB$ ChooseCard | AtRandom$ True | Choices$ Card.Egg+YouCtrl | SubAbility$ DBSac
+SVar:DBSac:DB$ Sacrifice | SacValid$ Card.ChosenCard | RememberSacrificed$ True | SubAbility$ DBNameCard
+SVar:DBNameCard:DB$ NameCard | AtRandom$ True | ValidCards$ Insect.cmcEQX | SubAbility$ DBConjure
+SVar:DBConjure:DB$ MakeCard | Name$ ChosenName | Conjure$ True | Zone$ Battlefield | SubAbility$ DBCleanup
+SVar:DBCleanup:DB$ Cleanup | ClearRemembered$ True | ClearNamedCard$ True
+SVar:X:Remembered$CardCounters.HATCHLING
+Oracle:Insects you control have double team and attack each turn if able\nAt the beginning of your upkeep, create a 0/1 green Egg creature token with defender, then put an Hatchling counter on each Egg you control.\nAt the beginning of your end step, if you control 3 or more Eggs, sacrifice one at random and conjure a random Insect with mana value equal to it's Hatchling counters 
