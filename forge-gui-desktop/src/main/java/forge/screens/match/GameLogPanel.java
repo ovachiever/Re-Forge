@@ -176,13 +176,23 @@ public class GameLogPanel extends JPanel {
         forceVerticalScrollbarToMax();
     }
 
+    /** The mind's speech stands out bold among the machine-written log lines. */
+    private SkinFont entryFont(final String text) {
+        try {
+            if (text != null && text.startsWith(forge.ai.llm.LlmConfig.name() + ":")) {
+                return FSkin.getBoldFont(textFont.getSize());
+            }
+        } catch (final Exception ignored) {}
+        return textFont;
+    }
+
     public void setTextFont(final SkinFont newFont) {
         this.textFont = newFont;
     }
 
     private JTextArea createNewLogEntryJTextArea(final String text, final boolean useAlternateBackColor) {
         final SkinnedTextArea tar = new SkinnedTextArea(text);
-        tar.setFont(textFont);
+        tar.setFont(entryFont(text));
         tar.setBorder(new EmptyBorder(3, 4, 3, 4));
         tar.setFocusable(false);
         tar.setEditable(false);
@@ -209,7 +219,7 @@ public class GameLogPanel extends JPanel {
         LogEntryTextArea(final String text, final boolean useAlternateBackColor,
                          final CardView card, final Iterable<PlayerView> viewers) {
             super(text);
-            setFont(textFont);
+            setFont(entryFont(text));
             setBorder(new EmptyBorder(PADDING, CARD_WIDTH + 2 * PADDING, PADDING, PADDING));
             setFocusable(false);
             setEditable(false);

@@ -316,6 +316,21 @@ public class KeyboardShortcuts {
      * throughout the project.
      *
      */
+    /** Bare-letter shortcuts must not fire while the user is typing in a text field (e.g. table chat). */
+    private static Action guardWhileTyping(final Action inner) {
+        return new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(final java.awt.event.ActionEvent e) {
+                final java.awt.Component fo = java.awt.KeyboardFocusManager
+                        .getCurrentKeyboardFocusManager().getFocusOwner();
+                if (fo instanceof javax.swing.text.JTextComponent) {
+                    return;
+                }
+                inner.actionPerformed(e);
+            }
+        };
+    }
+
     public static class Shortcut {
         /** */
         private final FPref prefkeys;
@@ -378,7 +393,7 @@ public class KeyboardShortcuts {
                 inputMap.put(key, str);
                 
                 // ...then attach actionListener to action map
-                actionMap.put(str, handler);
+                actionMap.put(str, guardWhileTyping(handler));
             }
         }
 

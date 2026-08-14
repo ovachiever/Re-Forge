@@ -100,3 +100,9 @@ __pycache__
 # EDHREC commander matrix tool intermediates
 forge-gui/tools/build
 forge-gui-ios/robovm.properties
+
+# Re-Forge
+run/res
+*.jsonl
+.reforge/
+experiments/**/pids.txt

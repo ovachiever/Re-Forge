@@ -458,6 +458,12 @@ public enum FControl implements KeyEventDispatcher {
         } else {
             altKeyLastDown = false;
             if (e.getID() == KeyEvent.KEY_PRESSED) {
+                // typing owns the keyboard: no menu shortcuts while a text component has focus
+                final java.awt.Component focusOwner = java.awt.KeyboardFocusManager
+                        .getCurrentKeyboardFocusManager().getFocusOwner();
+                if (focusOwner instanceof javax.swing.text.JTextComponent) {
+                    return false;
+                }
                 //give Forge menu the chance to handle the key event
                 return forgeMenu.handleKeyEvent(e);
             } else if (e.getID() == KeyEvent.KEY_RELEASED) {

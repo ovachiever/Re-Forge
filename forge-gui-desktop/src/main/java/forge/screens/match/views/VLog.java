@@ -185,8 +185,35 @@ public class VLog implements IVDoc<CLog> {
         //TODO: Find a way to avoid calling refreshLayout() on every update.
         p = parentCell.getBody();
         p.remove(gameLog);
+        final forge.toolbox.FTextField chat = getChatInput();
+        p.remove(chat);
         p.setLayout(new MigLayout("insets 1"));
+        p.add(chat, "dock south, h 26!");
         p.add(gameLog, "w 10:100%, h 100%");
+    }
+
+    // Table-chat input: what you type here lands in the LLM seat's next prompt,
+    // and the reply arrives through its table talk.
+    private forge.toolbox.FTextField chatInput = null;
+
+    private forge.toolbox.FTextField getChatInput() {
+        if (chatInput == null) {
+            chatInput = new forge.toolbox.FTextField.Builder()
+                    .ghostText("say something to " + forge.ai.llm.LlmConfig.name())
+                    .build();
+            chatInput.addActionListener(e -> {
+                final String msg = chatInput.getText().trim();
+                if (!msg.isEmpty()) {
+                    gameLog.addLogEntry("You: " + msg);
+                    forge.ai.llm.TableChat.submit(msg);
+                    chatInput.setText("");
+                }
+            });
+            forge.ai.llm.TableChat.setReplyListener(reply ->
+                    javax.swing.SwingUtilities.invokeLater(() ->
+                            gameLog.addLogEntry(forge.ai.llm.LlmConfig.name() + ": " + reply)));
+        }
+        return chatInput;
     }
 
     private void displayNewGameLogEntries(final GameView model) {

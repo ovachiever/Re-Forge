@@ -35,7 +35,11 @@ public class LobbyPlayerAi extends LobbyPlayer implements IGameEntitiesFactory {
     }
 
     private PlayerControllerAi createControllerFor(Player ai) {
-        PlayerControllerAi result = new PlayerControllerAi(ai.getGame(), ai, this);
+        boolean llmSeat = forge.ai.llm.LlmConfig.isForced()
+                || forge.ai.llm.LlmConfig.PROFILE_NAME.equals(aiProfile);
+        PlayerControllerAi result = llmSeat
+                ? new forge.ai.llm.LlmPlayerController(ai.getGame(), ai, this)
+                : new PlayerControllerAi(ai.getGame(), ai, this);
         result.getAi().setUseSimulation(option);
         return result;
     }
